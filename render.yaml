@@ -26,7 +26,8 @@ services:
     ipAllowList: [] # Render 내부 서비스끼리만 통신하도록 제한 (보안 우수)
 
   # 3. React Frontend (Static Site - 무료 자동 배포)
-  - type: static
+  - type: web
+    runtime: static
     name: admin-portal-ui
     buildCommand: cd admin-ui && npm install && npm run build
     staticPublishPath: admin-ui/dist
