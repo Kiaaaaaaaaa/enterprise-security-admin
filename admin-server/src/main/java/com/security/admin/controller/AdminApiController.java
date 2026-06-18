@@ -77,7 +77,15 @@ public class AdminApiController {
     public ResponseEntity<Map<String, String>> healthCheck() {
         Map<String, String> status = new HashMap<>();
         status.put("status", "UP");
-        status.put("redis", "CONNECTED");
+        
+        boolean redisOk = false;
+        try {
+            redisOk = sessionService.isRedisAvailable();
+        } catch (Exception e) {
+            // ignore
+        }
+        
+        status.put("redis", redisOk ? "CONNECTED" : "DISCONNECTED (Fallback to Memory)");
         status.put("db", "CONNECTED");
         return ResponseEntity.ok(status);
     }

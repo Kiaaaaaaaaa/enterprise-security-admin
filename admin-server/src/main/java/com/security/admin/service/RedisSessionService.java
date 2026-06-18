@@ -18,7 +18,7 @@ public class RedisSessionService {
     private final Map<String, SessionDto> localFallbackStore = new ConcurrentHashMap<>();
     private final Map<String, Long> localFallbackExpiry = new ConcurrentHashMap<>();
 
-    private boolean isRedisAvailable() {
+    public boolean isRedisAvailable() {
         if (redisTemplate == null) return false;
         try {
             // Send a ping command
