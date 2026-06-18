@@ -6,7 +6,7 @@ services:
     plan: free
     runtime: docker
     dockerContext: admin-server
-    dockerfilePath: Dockerfile
+    dockerfilePath: admin-server/Dockerfile
     envVars:
       - key: SPRING_REDIS_URL
         fromService:
