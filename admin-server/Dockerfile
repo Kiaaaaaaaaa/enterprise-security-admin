@@ -5,8 +5,8 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Runtime stage using OpenJDK 17
-FROM openjdk:17-jdk-slim
+# Runtime stage using Eclipse Temurin JRE 17
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY --from=build /app/target/admin-server-1.0.0.jar app.jar
 EXPOSE 8080
