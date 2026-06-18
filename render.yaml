@@ -28,11 +28,11 @@ services:
           name: security-db
           property: connectionString
 
-# 2. Redis Instance (자동 생성 및 Git 바인딩)
-redis:
-  name: cache-redis
-  plan: free # 무료 플랜 사용
-  ipAllowList: [] # Render 내부 서비스끼리만 통신하도록 제한 (보안 우수)
+  # 2. Redis Instance (자동 생성 및 Git 바인딩)
+  - type: redis
+    name: cache-redis
+    plan: free # 무료 플랜 사용
+    ipAllowList: [] # Render 내부 서비스끼리만 통신하도록 제한 (보안 우수)
 
 # 3. PostgreSQL Database (자동 생성 및 Git 바인딩)
 databases:
