@@ -461,7 +461,9 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const BACKEND_URL = "http://localhost:8080/api/admin";
+    let BACKEND_URL = "https://admin-api-server.onrender.com/api/admin";
+    const LOCAL_BACKEND_URL = "http://localhost:8080/api/admin";
+    const REMOTE_BACKEND_URL = "https://admin-api-server.onrender.com/api/admin";
 
     // ==========================================
     // 1. LOGIN COMPONENT
@@ -1391,11 +1393,13 @@
         { id: 'manager_kim', name: '김동현 팀장', role: 'SEC_MANAGER', dept: '인프라운영팀', createdAt: '2026-06-10 14:30' }
       ]);
 
-      // Dynamic HTTP Fetch with Auto-Fallback
+      // Dynamic HTTP Fetch with Auto-Fallback (Local first, then Remote)
       const syncWithBackend = async () => {
+        // 1. Try local backend first
         try {
-          const healthRes = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(800) });
+          const healthRes = await fetch(`${LOCAL_BACKEND_URL}/health`, { signal: AbortSignal.timeout(800) });
           if (healthRes.ok) {
+            BACKEND_URL = LOCAL_BACKEND_URL;
             setBackendStatus('ONLINE');
             
             const sessRes = await fetch(`${BACKEND_URL}/sessions`);
@@ -1410,8 +1414,31 @@
             return;
           }
         } catch (e) {
-          // ignore error, go to offline mode
+          // ignore local error
         }
+
+        // 2. Try remote backend next
+        try {
+          const healthRes = await fetch(`${REMOTE_BACKEND_URL}/health`, { signal: AbortSignal.timeout(1500) });
+          if (healthRes.ok) {
+            BACKEND_URL = REMOTE_BACKEND_URL;
+            setBackendStatus('ONLINE');
+            
+            const sessRes = await fetch(`${BACKEND_URL}/sessions`);
+            if (sessRes.ok) setSessions(await sessRes.json());
+
+            const auditRes = await fetch(`${BACKEND_URL}/audit-logs`);
+            if (auditRes.ok) setAuditLogs(await auditRes.json());
+
+            const userRes = await fetch(`${BACKEND_URL}/users`);
+            if (userRes.ok) setUsers(await userRes.json());
+
+            return;
+          }
+        } catch (e) {
+          // ignore remote error
+        }
+
         setBackendStatus('OFFLINE');
       };
 

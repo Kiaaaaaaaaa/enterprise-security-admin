@@ -1,23 +1,43 @@
-const BASE_URL = "http://localhost:8080/api/admin";
+const LOCAL_URL = "http://localhost:8080/api/admin";
+const REMOTE_URL = "https://admin-api-server.onrender.com/api/admin";
 
+export let BASE_URL = REMOTE_URL;
 let backendOnline = false;
 
-// 1. Healthcheck to verify if Spring Boot is online
+// 1. Healthcheck to verify if Spring Boot is online (Local first, then Remote)
 export const checkBackendHealth = async () => {
+  // Try Local first
   try {
-    const response = await fetch(`${BASE_URL}/health`, { 
+    const response = await fetch(`${LOCAL_URL}/health`, { 
       method: "GET",
-      signal: AbortSignal.timeout(1000) // Timeout after 1 second
+      signal: AbortSignal.timeout(800)
     });
     if (response.ok) {
+      BASE_URL = LOCAL_URL;
       backendOnline = true;
-    } else {
-      backendOnline = false;
+      return true;
     }
   } catch (error) {
-    backendOnline = false;
+    // Ignore local error
   }
-  return backendOnline;
+
+  // Try Remote next
+  try {
+    const response = await fetch(`${REMOTE_URL}/health`, { 
+      method: "GET",
+      signal: AbortSignal.timeout(1500)
+    });
+    if (response.ok) {
+      BASE_URL = REMOTE_URL;
+      backendOnline = true;
+      return true;
+    }
+  } catch (error) {
+    // Ignore remote error
+  }
+
+  backendOnline = false;
+  return false;
 };
 
 export const isBackendOnline = () => backendOnline;
