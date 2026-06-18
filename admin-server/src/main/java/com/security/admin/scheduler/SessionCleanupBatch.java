@@ -49,7 +49,7 @@ public class SessionCleanupBatch {
                     "SESSION_OP",
                     "Redis TTL 만료에 따른 자동 세션 클린업 완료",
                     session.getIp(),
-                    session.getPcInfo()
+                    session.getOs() + " | " + session.getBrowser()
                 );
                 auditLogRepository.save(expiredLog);
             }
