@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: admin-server
+
+  # Database configuration (Defaults to H2 in-memory for zero-config local runs)
+  datasource:
+    url: jdbc:h2:mem:securitydb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: password
+    driver-class-name: org.h2.Driver
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Redis Configuration (Defaults to local redis instance, supports environment variables)
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
+      timeout: 2000
+
+# =========================================================================
+# Production Deployment configuration (e.g. Render.com with PostgreSQL / Redis)
+# To use PostgreSQL, replace datasource and jpa settings with:
+#
+# spring:
+#   datasource:
+#     url: jdbc:postgresql://<RENDER_PG_HOST>:<PORT>/<DATABASE>
+#     username: <USER>
+#     password: <PASSWORD>
+#     driver-class-name: org.postgresql.Driver
+#   jpa:
+#     database-platform: org.hibernate.dialect.PostgreSQLDialect
+#     hibernate:
+#       ddl-auto: update
+# =========================================================================

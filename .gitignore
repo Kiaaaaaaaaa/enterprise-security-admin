@@ -1,0 +1,23 @@
+# React Dependencies & Builds
+admin-ui/node_modules/
+admin-ui/dist/
+admin-ui/.env.local
+
+# Spring Boot Target & Builds
+admin-server/target/
+admin-server/.mvn/wrapper/maven-wrapper.jar
+
+# IDE & Editor Settings
+.idea/
+*.iml
+*.iws
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS System Files
+.DS_Store
+Thumbs.db
