@@ -3,6 +3,7 @@ services:
   # 1. Spring Boot Web Service (API Server)
   - type: web
     name: admin-api-server
+    plan: free
     runtime: docker
     dockerContext: admin-server
     dockerfilePath: Dockerfile
