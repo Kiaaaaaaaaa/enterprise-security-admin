@@ -3,25 +3,15 @@ services:
   # 1. Spring Boot Web Service (API Server)
   - type: web
     name: admin-api-server
-    runtime: java
-    buildCommand: ./mvnw clean package -DskipTests
-    startCommand: java -jar target/admin-server-1.0.0.jar
+    runtime: docker
+    dockerContext: admin-server
+    dockerfilePath: Dockerfile
     envVars:
-      - key: SPRING_REDIS_HOST
+      - key: SPRING_REDIS_URL
         fromService:
           name: cache-redis
           type: redis
-          property: host
-      - key: SPRING_REDIS_PORT
-        fromService:
-          name: cache-redis
-          type: redis
-          property: port
-      - key: SPRING_REDIS_PASSWORD
-        fromService:
-          name: cache-redis
-          type: redis
-          property: password
+          property: connectionString
       # PostgreSQL Database 자동으로 바인딩
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
