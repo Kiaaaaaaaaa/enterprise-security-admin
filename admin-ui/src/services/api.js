@@ -63,14 +63,14 @@ export const fetchSessionsApi = async (fallbackData) => {
 export const createSessionApi = async (sessionDto) => {
   if (backendOnline) {
     try {
-      await fetch(`${BASE_URL}/sessions`, {
+      const res = await fetch(`${BASE_URL}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sessionDto)
       });
-      return true;
+      return res.ok;
     } catch (e) {
-      console.error(e);
+      console.error("Create session failed:", e);
     }
   }
   return false;
@@ -79,10 +79,10 @@ export const createSessionApi = async (sessionDto) => {
 export const renewSessionApi = async (id) => {
   if (backendOnline) {
     try {
-      await fetch(`${BASE_URL}/sessions/${id}/renew`, { method: "POST" });
-      return true;
+      const res = await fetch(`${BASE_URL}/sessions/${id}/renew`, { method: "POST" });
+      return res.ok;
     } catch (e) {
-      console.error(e);
+      console.error("Renew session failed:", e);
     }
   }
   return false;
@@ -91,10 +91,10 @@ export const renewSessionApi = async (id) => {
 export const deleteSessionApi = async (id) => {
   if (backendOnline) {
     try {
-      await fetch(`${BASE_URL}/sessions/${id}`, { method: "DELETE" });
-      return true;
+      const res = await fetch(`${BASE_URL}/sessions/${id}`, { method: "DELETE" });
+      return res.ok;
     } catch (e) {
-      console.error(e);
+      console.error("Delete session failed:", e);
     }
   }
   return false;
@@ -107,7 +107,7 @@ export const fetchAuditLogsApi = async (fallbackData) => {
       const res = await fetch(`${BASE_URL}/audit-logs`);
       if (res.ok) return await res.json();
     } catch (e) {
-      console.error(e);
+      console.error("Fetch audit logs failed:", e);
     }
   }
   return fallbackData;
@@ -116,14 +116,14 @@ export const fetchAuditLogsApi = async (fallbackData) => {
 export const createAuditLogApi = async (logEntity) => {
   if (backendOnline) {
     try {
-      await fetch(`${BASE_URL}/audit-logs`, {
+      const res = await fetch(`${BASE_URL}/audit-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(logEntity)
       });
-      return true;
+      return res.ok;
     } catch (e) {
-      console.error(e);
+      console.error("Create audit log failed:", e);
     }
   }
   return false;
@@ -136,7 +136,7 @@ export const fetchUsersApi = async (fallbackData) => {
       const res = await fetch(`${BASE_URL}/users`);
       if (res.ok) return await res.json();
     } catch (e) {
-      console.error(e);
+      console.error("Fetch users failed:", e);
     }
   }
   return fallbackData;
@@ -145,14 +145,14 @@ export const fetchUsersApi = async (fallbackData) => {
 export const createUserApi = async (userEntity) => {
   if (backendOnline) {
     try {
-      await fetch(`${BASE_URL}/users`, {
+      const res = await fetch(`${BASE_URL}/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(userEntity)
       });
-      return true;
+      return res.ok;
     } catch (e) {
-      console.error(e);
+      console.error("Create user failed:", e);
     }
   }
   return false;

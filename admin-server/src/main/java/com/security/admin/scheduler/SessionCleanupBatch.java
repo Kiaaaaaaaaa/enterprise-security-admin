@@ -12,16 +12,21 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.security.admin.service.AuditLogService;
+
 @Component
 public class SessionCleanupBatch {
 
     private static final Logger log = LoggerFactory.getLogger(SessionCleanupBatch.class);
 
-    @Autowired
-    private RedisSessionService sessionService;
+    private final RedisSessionService sessionService;
+    private final AuditLogService auditLogService;
 
     @Autowired
-    private AuditLogRepository auditLogRepository;
+    public SessionCleanupBatch(RedisSessionService sessionService, AuditLogService auditLogService) {
+        this.sessionService = sessionService;
+        this.auditLogService = auditLogService;
+    }
 
     // Batch Job: Runs every 1 minute to check for expired Redis/Memory sessions
     @Scheduled(fixedRate = 60000)
@@ -51,7 +56,7 @@ public class SessionCleanupBatch {
                     session.getIp(),
                     session.getOs() + " | " + session.getBrowser()
                 );
-                auditLogRepository.save(expiredLog);
+                auditLogService.recordAuditLog(expiredLog);
             }
         }
 

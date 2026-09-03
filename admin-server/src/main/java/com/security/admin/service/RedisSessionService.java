@@ -8,8 +8,15 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class RedisSessionService {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisSessionService.class);
 
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
@@ -29,25 +36,30 @@ public class RedisSessionService {
         }
     }
 
-    // 1. Get all active sessions
+    // 1. Get all active sessions using Non-blocking SCAN Cursor
     public List<SessionDto> getAllActiveSessions() {
         if (isRedisAvailable()) {
             try {
-                Set<String> keys = redisTemplate.keys("session:*");
-                if (keys == null || keys.isEmpty()) return Collections.emptyList();
-                
+                ScanOptions options = ScanOptions.scanOptions()
+                        .match("session:*")
+                        .count(100)
+                        .build();
+
                 List<SessionDto> sessions = new ArrayList<>();
-                for (String key : keys) {
-                    SessionDto session = (SessionDto) redisTemplate.opsForValue().get(key);
-                    if (session != null) {
-                        Long expire = redisTemplate.getExpire(key, TimeUnit.MINUTES);
-                        session.setExpiresIn(expire != null && expire > 0 ? expire : 0);
-                        sessions.add(session);
+                try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                    while (cursor.hasNext()) {
+                        String key = cursor.next();
+                        SessionDto session = (SessionDto) redisTemplate.opsForValue().get(key);
+                        if (session != null) {
+                            Long expire = redisTemplate.getExpire(key, TimeUnit.MINUTES);
+                            session.setExpiresIn(expire != null && expire > 0 ? expire : 0);
+                            sessions.add(session);
+                        }
                     }
                 }
                 return sessions;
             } catch (Exception e) {
-                // fallback if query errors out
+                log.warn("Redis SCAN operation failed, falling back to local storage: {}", e.getMessage());
             }
         }
         
