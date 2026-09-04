@@ -1,31 +1,35 @@
 const LOCAL_URL = "http://localhost:8080/api/admin";
 const REMOTE_URL = "https://admin-api-server.onrender.com/api/admin";
 
-export let BASE_URL = REMOTE_URL;
+// If deployed on remote or localhost
+const isLocalEnv = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+export let BASE_URL = isLocalEnv ? LOCAL_URL : REMOTE_URL;
 let backendOnline = false;
 
-// 1. Healthcheck to verify if Spring Boot is online (Local first, then Remote)
+// 1. Healthcheck to verify if Spring Boot is online
 export const checkBackendHealth = async () => {
-  // Try Local first
-  try {
-    const response = await fetch(`${LOCAL_URL}/health`, { 
-      method: "GET",
-      signal: AbortSignal.timeout(800)
-    });
-    if (response.ok) {
-      BASE_URL = LOCAL_URL;
-      backendOnline = true;
-      return true;
+  // If local environment, test local first
+  if (isLocalEnv) {
+    try {
+      const response = await fetch(`${LOCAL_URL}/health`, { 
+        method: "GET",
+        signal: AbortSignal.timeout(1500)
+      });
+      if (response.ok) {
+        BASE_URL = LOCAL_URL;
+        backendOnline = true;
+        return true;
+      }
+    } catch (error) {
+      // ignore
     }
-  } catch (error) {
-    // Ignore local error
   }
 
-  // Try Remote next
+  // Test Remote (Render Cloud API) with 5s timeout to handle spin-up/cold starts
   try {
     const response = await fetch(`${REMOTE_URL}/health`, { 
       method: "GET",
-      signal: AbortSignal.timeout(1500)
+      signal: AbortSignal.timeout(5000)
     });
     if (response.ok) {
       BASE_URL = REMOTE_URL;
@@ -33,7 +37,21 @@ export const checkBackendHealth = async () => {
       return true;
     }
   } catch (error) {
-    // Ignore remote error
+    // ignore
+  }
+
+  // Fallback to testing BASE_URL
+  try {
+    const response = await fetch(`${BASE_URL}/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(4000)
+    });
+    if (response.ok) {
+      backendOnline = true;
+      return true;
+    }
+  } catch (error) {
+    // ignore
   }
 
   backendOnline = false;
@@ -42,173 +60,132 @@ export const checkBackendHealth = async () => {
 
 export const isBackendOnline = () => backendOnline;
 
+// Helper fetch wrapper
+const requestApi = async (path, options = {}) => {
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (res.ok) {
+      backendOnline = true;
+      return { ok: true, status: res.status, data: res.status !== 204 ? await res.json().catch(() => null) : null };
+    } else {
+      const errorBody = await res.json().catch(() => ({}));
+      return { ok: false, status: res.status, error: errorBody };
+    }
+  } catch (err) {
+    console.warn(`API call failed for ${path}:`, err.message);
+    return { ok: false, error: { message: "네트워크 연결 실패" } };
+  }
+};
+
 // ==========================================
 // API WRAPPERS WITH OFFLINE FALLBACKS
 // ==========================================
 
 // 1. Sessions APIs
 export const fetchSessionsApi = async (fallbackData) => {
-  const online = await checkBackendHealth();
-  if (online) {
-    try {
-      const res = await fetch(`${BASE_URL}/sessions`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.warn("Spring Boot connection lost during fetch. Falling back.");
-    }
+  const result = await requestApi('/sessions');
+  if (result.ok && Array.isArray(result.data)) {
+    return result.data;
   }
   return fallbackData;
 };
 
 export const createSessionApi = async (sessionDto) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sessionDto)
-      });
-      return res.ok;
-    } catch (e) {
-      console.error("Create session failed:", e);
-    }
-  }
-  return false;
+  const result = await requestApi('/sessions', {
+    method: "POST",
+    body: JSON.stringify(sessionDto)
+  });
+  return result.ok;
 };
 
 export const renewSessionApi = async (id) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/sessions/${id}/renew`, { method: "POST" });
-      return res.ok;
-    } catch (e) {
-      console.error("Renew session failed:", e);
-    }
-  }
-  return false;
+  const result = await requestApi(`/sessions/${id}/renew`, { method: "POST" });
+  return result.ok;
 };
 
 export const deleteSessionApi = async (id) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/sessions/${id}`, { method: "DELETE" });
-      return res.ok;
-    } catch (e) {
-      console.error("Delete session failed:", e);
-    }
-  }
-  return false;
+  const result = await requestApi(`/sessions/${id}`, { method: "DELETE" });
+  return result.ok;
 };
 
 // 2. Audit Logs APIs
 export const fetchAuditLogsApi = async (fallbackData) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/audit-logs`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.error("Fetch audit logs failed:", e);
-    }
+  const result = await requestApi('/audit-logs');
+  if (result.ok && Array.isArray(result.data)) {
+    return result.data;
   }
   return fallbackData;
 };
 
 export const createAuditLogApi = async (logEntity) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/audit-logs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(logEntity)
-      });
-      return res.ok;
-    } catch (e) {
-      console.error("Create audit log failed:", e);
-    }
-  }
-  return false;
+  const result = await requestApi('/audit-logs', {
+    method: "POST",
+    body: JSON.stringify(logEntity)
+  });
+  return result.ok;
 };
 
-// 3. User Accounts APIs
+// 3. User Accounts APIs (PostgreSQL admin_users)
 export const fetchUsersApi = async (fallbackData) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/users`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.error("Fetch users failed:", e);
-    }
+  const result = await requestApi('/users');
+  if (result.ok && Array.isArray(result.data)) {
+    return result.data;
   }
   return fallbackData;
 };
 
 export const createUserApi = async (userEntity) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userEntity)
-      });
-      return res.ok;
-    } catch (e) {
-      console.error("Create user failed:", e);
-    }
+  const result = await requestApi('/users', {
+    method: "POST",
+    body: JSON.stringify(userEntity)
+  });
+  if (result.ok) {
+    return { success: true };
   }
-  return false;
+  return { 
+    success: false, 
+    message: result.error?.message || "사용자 생성 요청에 실패했습니다." 
+  };
 };
 
-// 4. Common Codes APIs (PostgreSQL)
+// 4. Common Codes APIs (PostgreSQL common_codes)
 export const fetchCodesApi = async (fallbackData = []) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/codes`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.error("Fetch codes failed:", e);
-    }
+  const result = await requestApi('/codes');
+  if (result.ok && Array.isArray(result.data)) {
+    return result.data;
   }
   return fallbackData;
 };
 
 export const createCodeApi = async (codeEntity) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/codes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(codeEntity)
-      });
-      return res.ok;
-    } catch (e) {
-      console.error("Create code failed:", e);
-    }
-  }
-  return false;
+  const result = await requestApi('/codes', {
+    method: "POST",
+    body: JSON.stringify(codeEntity)
+  });
+  return result.ok;
 };
 
 // 5. Real-time System Metrics API
 export const fetchSystemMetricsApi = async () => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/system/metrics`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.error("Fetch system metrics failed:", e);
-    }
+  const result = await requestApi('/system/metrics');
+  if (result.ok) {
+    return result.data;
   }
   return null;
 };
 
 // 6. Dynamic Client Info & IP Detection API
 export const fetchClientInfoApi = async () => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/client-info`);
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.error("Fetch client info failed:", e);
-    }
+  const result = await requestApi('/client-info');
+  if (result.ok && result.data) {
+    return result.data;
   }
   return {
     ip: "127.0.0.1",
@@ -221,26 +198,36 @@ export const fetchClientInfoApi = async () => {
 
 // 7. Database-driven Admin Login API
 export const loginApi = async (loginReq) => {
-  if (backendOnline) {
-    try {
-      const res = await fetch(`${BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginReq)
-      });
-      if (res.ok) {
-        return { success: true, data: await res.json() };
-      }
-      const err = await res.json();
-      return { success: false, message: err.message || "로그인에 실패했습니다." };
-    } catch (e) {
-      console.error("Login request failed:", e);
-      return { success: false, message: "백엔드 서버와의 통신에 실패했습니다." };
-    }
+  const result = await requestApi('/auth/login', {
+    method: "POST",
+    body: JSON.stringify(loginReq)
+  });
+  
+  if (result.ok && result.data) {
+    return { success: true, data: result.data };
   }
-  // Offline fallback
-  return { 
-    success: true, 
-    data: { id: loginReq.username, name: "최고 관리자 (오프라인)", role: "SUPER_ADMIN", dept: "정보보안본부" } 
-  };
+
+  // If server responded with error message
+  if (result.error && result.error.message) {
+    return { success: false, message: result.error.message };
+  }
+
+  // If completely offline fallback
+  const localUsers = JSON.parse(localStorage.getItem('admin_users') || '[]');
+  const matchedUser = localUsers.find(u => u.id === loginReq.username);
+  if (matchedUser) {
+    return {
+      success: true,
+      data: { id: matchedUser.id, name: matchedUser.name, role: matchedUser.role, dept: matchedUser.dept }
+    };
+  }
+
+  if (loginReq.username === 'admin' || loginReq.username === 'manager_kim' || loginReq.username === 'operator_min') {
+    return { 
+      success: true, 
+      data: { id: loginReq.username, name: "최고 관리자", role: "SUPER_ADMIN", dept: "정보보안본부" } 
+    };
+  }
+
+  return { success: false, message: "등록되지 않은 관리자 계정입니다: " + loginReq.username };
 };

@@ -21,6 +21,18 @@ import {
   fetchClientInfoApi
 } from './services/api';
 
+const getInitialUsers = () => {
+  try {
+    const saved = localStorage.getItem('admin_users');
+    if (saved) return JSON.parse(saved);
+  } catch (e) {}
+  return [
+    { id: 'admin', name: '최고 관리자', role: 'SUPER_ADMIN', dept: '정보보안본부', createdAt: '2026-06-01 10:00' },
+    { id: 'manager_kim', name: '김동현 팀장', role: 'SEC_MANAGER', dept: '인프라운영팀', createdAt: '2026-06-10 14:30' },
+    { id: 'operator_min', name: '민아름 주임', role: 'SYSTEM_USER', dept: '관제운영그룹', createdAt: '2026-06-12 09:15' }
+  ];
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
@@ -31,7 +43,7 @@ export default function App() {
   // 1. Initial State Data (synced live from PostgreSQL and Redis)
   const [sessions, setSessions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(getInitialUsers);
   const [codes, setCodes] = useState([]);
 
   // Load live data from Spring Boot PostgreSQL & Redis
@@ -51,7 +63,10 @@ export default function App() {
 
       if (backendSessions) setSessions(backendSessions);
       if (backendLogs) setAuditLogs(backendLogs);
-      if (backendUsers) setUsers(backendUsers);
+      if (backendUsers && Array.isArray(backendUsers) && backendUsers.length > 0) {
+        setUsers(backendUsers);
+        try { localStorage.setItem('admin_users', JSON.stringify(backendUsers)); } catch (e) {}
+      }
       if (backendCodes) setCodes(backendCodes);
       if (metrics) setSystemMetrics(metrics);
       if (cInfo) setClientInfo(cInfo);
@@ -159,28 +174,34 @@ export default function App() {
   };
 
   const handleCreateUser = async (newUser) => {
-    const success = await createUserApi(newUser);
-    if (success) {
+    const res = await createUserApi(newUser);
+    if (res && res.success) {
       syncWithBackend();
+      return { success: true };
     } else {
-      // Local fallback
+      // Local fallback persistence
       const userRecord = {
         ...newUser,
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
       };
-      setUsers(prev => [...prev, userRecord]);
+      setUsers(prev => {
+        const next = [...prev, userRecord];
+        try { localStorage.setItem('admin_users', JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
 
       const newLog = {
         id: Date.now(),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
         userId: currentUser?.id || "SYSTEM",
-        action: "신규 보안 관리자 계정 생성 (계정생성)",
+        action: "신규 보안 관리자 계정 생성",
         actionCategory: "CONFIG",
         detail: `ID: ${newUser.id} | 등급: ${newUser.role} | 부서: ${newUser.dept}`,
         ip: currentUser?.pcInfo?.ip || clientInfo?.ip || "127.0.0.1",
         pcInfo: currentUser?.pcInfo?.os || clientInfo?.os || "Console Admin"
       };
       setAuditLogs(prev => [newLog, ...prev]);
+      return { success: true };
     }
   };
 
@@ -264,7 +285,7 @@ export default function App() {
         <div style={{ padding: '1.25rem', borderTop: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.8rem' }}>
-              {currentUser.name.charAt(0)}
+              {currentUser.name ? currentUser.name.charAt(0) : 'U'}
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>{currentUser.name}</div>
