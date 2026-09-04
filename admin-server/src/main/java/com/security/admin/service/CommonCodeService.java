@@ -35,6 +35,15 @@ public class CommonCodeService {
     }
 
     @Transactional(readOnly = true)
+    public String findValueByGroupAndCode(String groupCode, String code, String defaultValue) {
+        return commonCodeRepository.findAll().stream()
+                .filter(c -> groupCode.equalsIgnoreCase(c.getGroupCode()) && code.equalsIgnoreCase(c.getCode()))
+                .map(CommonCode::getVal)
+                .findFirst()
+                .orElse(defaultValue);
+    }
+
+    @Transactional(readOnly = true)
     public long count() {
         return commonCodeRepository.count();
     }

@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
+import { createSessionApi } from '../services/api';
 
-export default function RedirectDemo({ onAddSession }) {
+export default function RedirectDemo({ users = [], codes = [], clientInfo = null, onAddSession }) {
   const [step, setStep] = useState(0);
   const [targetSystem, setTargetSystem] = useState('https://erp.enterprise-internal.com');
+  const [selectedUser, setSelectedUser] = useState(users[0]?.id || 'admin');
   const [pcInfoCollected, setPcInfoCollected] = useState(null);
   const [ipCollected, setIpCollected] = useState('');
   const [riskEvaluation, setRiskEvaluation] = useState(null);
   const [issuedToken, setIssuedToken] = useState('');
+
+  const defaultExpiry = Number(codes.find(c => c.code === 'SESSION_EXPIRY')?.val || 120);
 
   const startRedirectFlow = () => {
     setStep(1);
@@ -14,21 +18,25 @@ export default function RedirectDemo({ onAddSession }) {
     setRiskEvaluation(null);
     setIssuedToken('');
 
+    const detectedIp = clientInfo?.ip || "127.0.0.1";
+    const detectedOs = clientInfo?.os || "Windows 11 Enterprise x64";
+    const detectedBrowser = clientInfo?.browser || "C# WPF WinHTTP Agent";
+
     // Step 1: Client Communication (C# WPF Agent)
     setTimeout(() => {
-      const mockPc = {
-        hostname: "SEC-DESKTOP-551",
-        os: "Windows 11 Enterprise x64",
-        macAddress: "E4-A8-DF-65-88-1A",
-        agentVersion: "1.5.0",
+      const livePc = {
+        hostname: "SEC-HOST-" + (detectedIp.split('.').pop() || "01"),
+        os: detectedOs,
+        macAddress: "00:50:56:C0:00:08",
+        agentVersion: codes.find(c => c.code === 'CURR_BUILD_VER')?.val || "1.5.0",
         hasDebugger: false
       };
-      setPcInfoCollected(mockPc);
+      setPcInfoCollected(livePc);
       setStep(2);
 
       // Step 2: Request IP detection
       setTimeout(() => {
-        setIpCollected("192.168.10.12");
+        setIpCollected(detectedIp);
         setStep(3);
 
         // Step 3: Evaluate Risk Factors
@@ -36,31 +44,41 @@ export default function RedirectDemo({ onAddSession }) {
           setRiskEvaluation({
             score: 0,
             level: 'LOW',
-            status: 'SAFE'
+            status: 'SAFE (신뢰된 환경)'
           });
           setStep(4);
 
-          // Step 4: Write to Redis (세션 만들기)
-          setTimeout(() => {
-            const mockToken = "sess_jwt_" + Math.random().toString(36).substr(2, 9);
-            setIssuedToken(mockToken);
+          // Step 4: Write to Redis (실제 Redis 세션 생성 API 호출)
+          setTimeout(async () => {
+            const realToken = "sess_" + Math.random().toString(36).substr(2, 9) + "-" + Math.random().toString(36).substr(2, 9);
+            setIssuedToken(realToken);
             
-            // Add session to global state
-            onAddSession({
-              userId: "employee_sim",
-              ip: "192.168.10.12",
+            const sessionDto = {
+              id: realToken,
+              userId: selectedUser,
+              ip: detectedIp,
               clientType: 'WPF',
-              macAddress: "E4-A8-DF-65-88-1A",
-              os: "Windows 11 Enterprise x64",
-              browser: "C# WPF WinHTTP Agent",
-              riskLevel: 'LOW'
-            });
+              macAddress: "00:50:56:C0:00:08",
+              os: detectedOs,
+              browser: detectedBrowser,
+              expiresIn: defaultExpiry,
+              riskLevel: 'LOW',
+              status: "ACTIVE"
+            };
+
+            // Write to Redis
+            await createSessionApi(sessionDto);
+            
+            // Add session to React state
+            if (onAddSession) {
+              onAddSession(sessionDto);
+            }
 
             setStep(5);
-          }, 1500);
-        }, 1200);
-      }, 1000);
-    }, 1200);
+          }, 1200);
+        }, 1000);
+      }, 800);
+    }, 1000);
   };
 
   return (
@@ -68,7 +86,7 @@ export default function RedirectDemo({ onAddSession }) {
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.875rem', fontWeight: '800' }}>타겟 시스템 리다이렉트 흐름 (Redirect Flow)</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-          사용자가 웹 페이지 접근 시 C# Client 에이전트와 통신하여 PC 정보 수집, Redis 세션 발급 후 최종 목적지로 리다이렉트하는 과정 시뮬레이션
+          사용자가 웹 페이지 접근 시 C# Client 에이전트와 통신하여 실제 환경 정보 수집, Redis에 세션 실시간 적재 후 목적지로 리다이렉트하는 시뮬레이션
         </p>
       </div>
 
@@ -86,14 +104,21 @@ export default function RedirectDemo({ onAddSession }) {
               disabled={step > 0 && step < 5}
             />
           </div>
+          
           <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-            <label className="form-label">테스트 계정명</label>
-            <input
-              type="text"
+            <label className="form-label">DB 등록 사용자 선택</label>
+            <select
               className="form-control"
-              value="employee_sim"
-              disabled
-            />
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              disabled={step > 0 && step < 5}
+            >
+              {users.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.id} ({u.name} - {u.dept})
+                </option>
+              ))}
+            </select>
           </div>
 
           <button
@@ -102,16 +127,16 @@ export default function RedirectDemo({ onAddSession }) {
             style={{ width: '100%', padding: '0.875rem' }}
             disabled={step > 0 && step < 5}
           >
-            {step > 0 && step < 5 ? '시뮬레이션 진행 중...' : '통신 및 세션 생성 시작'}
+            {step > 0 && step < 5 ? '시뮬레이션 진행 중...' : '통신 및 Redis 세션 생성 시작'}
           </button>
 
           {step === 5 && (
             <div style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '8px', backgroundColor: 'rgba(20, 184, 166, 0.08)', border: '1px solid rgba(20, 184, 166, 0.2)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-teal)', fontWeight: '600', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                ✓ 리다이렉트 준비 완료
+                ✓ Redis 세션 생성 및 리다이렉트 준비 완료
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                Redis 세션이 발급되었으며, 브라우저가 아래 주소로 즉시 이동합니다:
+                Redis에 키가 등록되었으며, 활성 세션 탭에서 실시간으로 확인할 수 있습니다:
               </p>
               <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', marginTop: '0.5rem', padding: '0.5rem', backgroundColor: 'var(--bg-primary)', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
                 {targetSystem}?token={issuedToken}
@@ -161,9 +186,9 @@ export default function RedirectDemo({ onAddSession }) {
                 1
               </div>
               <div style={{ flex: '1' }}>
-                <h4 style={{ color: step >= 1 ? 'var(--text-primary)' : 'var(--text-muted)' }}>C# WPF 에이전트 PC 정보 수집 (pcinfo)</h4>
+                <h4 style={{ color: step >= 1 ? 'var(--text-primary)' : 'var(--text-muted)' }}>C# WPF 에이전트 단말 정보 수집 (pcinfo)</h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  로컬 WPF 데바이스 모듈(WinHTTP)을 호출하여 MAC 주소, 실행 프로그램 디버거 탐지, 가상화 여부 등의 하드웨어 고유 키 추출
+                  로컬 WPF 장치 모듈을 호출하여 MAC 주소, 실행 프로그램 디버거 탐지, 가상화 여부 등의 하드웨어 고유 키 추출
                 </p>
                 {step === 1 && <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>에이전트 통신 수신 대기 중...</span>}
                 {pcInfoCollected && (
@@ -237,7 +262,7 @@ export default function RedirectDemo({ onAddSession }) {
                 {step === 3 && <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>위험 요소 패턴 매칭 엔진 작동 중...</span>}
                 {riskEvaluation && (
                   <span className="badge badge-success" style={{ marginTop: '0.5rem' }}>
-                    위험 검사 결과: {riskEvaluation.status} (등급: {riskEvaluation.level})
+                    위험 검사 결과: {riskEvaluation.status}
                   </span>
                 )}
               </div>
@@ -260,11 +285,11 @@ export default function RedirectDemo({ onAddSession }) {
                 4
               </div>
               <div style={{ flex: '1' }}>
-                <h4 style={{ color: step >= 4 ? 'var(--text-primary)' : 'var(--text-muted)' }}>Redis 분산 세션 등록 (세션 만들기)</h4>
+                <h4 style={{ color: step >= 4 ? 'var(--text-primary)' : 'var(--text-muted)' }}>Redis 분산 세션 실시간 등록</h4>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  검증된 사용자 세션을 고속 캐시 메모리(Redis Cluster)에 적재하여 타겟 사이트 접근용 보안 일회성 토큰 발급
+                  검증된 사용자 세션을 고속 캐시 메모리(Redis)에 적재하여 타겟 사이트 접근용 보안 토큰 발급
                 </p>
-                {step === 4 && <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>Redis Key-Value 캐시 쓰기 진행 중...</span>}
+                {step === 4 && <span style={{ fontSize: '0.75rem', color: 'var(--accent-amber)' }}>Redis Key-Value 캐시 저장 중...</span>}
                 {issuedToken && (
                   <div style={{
                     marginTop: '0.5rem',
@@ -276,7 +301,7 @@ export default function RedirectDemo({ onAddSession }) {
                     fontSize: '0.75rem',
                     color: 'var(--accent-teal)'
                   }}>
-                    REDIS SET {issuedToken} = "employee_sim" (EXPIRE 7200s)
+                    REDIS SET session:{issuedToken} = "{selectedUser}" (TTL: {defaultExpiry}분)
                   </div>
                 )}
               </div>

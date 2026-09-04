@@ -157,3 +157,90 @@ export const createUserApi = async (userEntity) => {
   }
   return false;
 };
+
+// 4. Common Codes APIs (PostgreSQL)
+export const fetchCodesApi = async (fallbackData = []) => {
+  if (backendOnline) {
+    try {
+      const res = await fetch(`${BASE_URL}/codes`);
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.error("Fetch codes failed:", e);
+    }
+  }
+  return fallbackData;
+};
+
+export const createCodeApi = async (codeEntity) => {
+  if (backendOnline) {
+    try {
+      const res = await fetch(`${BASE_URL}/codes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(codeEntity)
+      });
+      return res.ok;
+    } catch (e) {
+      console.error("Create code failed:", e);
+    }
+  }
+  return false;
+};
+
+// 5. Real-time System Metrics API
+export const fetchSystemMetricsApi = async () => {
+  if (backendOnline) {
+    try {
+      const res = await fetch(`${BASE_URL}/system/metrics`);
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.error("Fetch system metrics failed:", e);
+    }
+  }
+  return null;
+};
+
+// 6. Dynamic Client Info & IP Detection API
+export const fetchClientInfoApi = async () => {
+  if (backendOnline) {
+    try {
+      const res = await fetch(`${BASE_URL}/client-info`);
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.error("Fetch client info failed:", e);
+    }
+  }
+  return {
+    ip: "127.0.0.1",
+    os: navigator.userAgent.includes("Windows") ? "Windows PC" : (navigator.userAgent.includes("Mac") ? "macOS" : "Linux"),
+    browser: navigator.userAgent.includes("Chrome") ? "Google Chrome" : "Web Browser",
+    serverTime: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    isLocal: true
+  };
+};
+
+// 7. Database-driven Admin Login API
+export const loginApi = async (loginReq) => {
+  if (backendOnline) {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginReq)
+      });
+      if (res.ok) {
+        return { success: true, data: await res.json() };
+      }
+      const err = await res.json();
+      return { success: false, message: err.message || "로그인에 실패했습니다." };
+    } catch (e) {
+      console.error("Login request failed:", e);
+      return { success: false, message: "백엔드 서버와의 통신에 실패했습니다." };
+    }
+  }
+  // Offline fallback
+  return { 
+    success: true, 
+    data: { id: loginReq.username, name: "최고 관리자 (오프라인)", role: "SUPER_ADMIN", dept: "정보보안본부" } 
+  };
+};

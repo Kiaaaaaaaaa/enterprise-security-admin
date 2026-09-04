@@ -56,6 +56,11 @@ public class AdminUserService {
     }
 
     @Transactional(readOnly = true)
+    public AdminUser findById(String id) {
+        return adminUserRepository.findById(id).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
     public long count() {
         return adminUserRepository.count();
     }

@@ -124,6 +124,35 @@ class AdminApiControllerTest {
     }
 
     @Test
+    @DisplayName("시스템 실시간 메트릭 API 테스트")
+    void testGetSystemMetrics() throws Exception {
+        given(sessionService.isRedisAvailable()).willReturn(true);
+        given(sessionService.getAllActiveSessions()).willReturn(Collections.emptyList());
+        given(auditLogService.count()).willReturn(10L);
+        given(adminUserService.count()).willReturn(3L);
+        given(commonCodeService.count()).willReturn(8L);
+
+        mockMvc.perform(get("/api/admin/system/metrics"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.redisStatus").value("CONNECTED (Active Master)"))
+                .andExpect(jsonPath("$.totalAuditLogsCount").value(10))
+                .andExpect(jsonPath("$.totalUsersCount").value(3))
+                .andExpect(jsonPath("$.totalCodesCount").value(8));
+    }
+
+    @Test
+    @DisplayName("동적 클라이언트 정보 진단 API 테스트")
+    void testGetClientInfo() throws Exception {
+        mockMvc.perform(get("/api/admin/client-info")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/125.0.0.0 Safari/537.36")
+                        .header("X-Forwarded-For", "203.0.113.195"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ip").value("203.0.113.195"))
+                .andExpect(jsonPath("$.os").value("Windows PC"))
+                .andExpect(jsonPath("$.browser").value("Google Chrome"));
+    }
+
+    @Test
     @DisplayName("세션 강제 종료 API (204 No Content)")
     void testDeleteSession() throws Exception {
         mockMvc.perform(delete("/api/admin/sessions/sess_001"))
