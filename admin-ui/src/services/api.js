@@ -25,7 +25,7 @@ export const checkBackendHealth = async () => {
     }
   }
 
-  // Test Remote (Render Cloud API) with 5s timeout to handle spin-up/cold starts
+  // Test Remote (Render Cloud API) with 5s timeout
   try {
     const response = await fetch(`${REMOTE_URL}/health`, { 
       method: "GET",
@@ -69,7 +69,7 @@ const requestApi = async (path, options = {}) => {
         "Content-Type": "application/json",
         ...(options.headers || {})
       },
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(10000)
     });
     if (res.ok) {
       backendOnline = true;
@@ -80,7 +80,7 @@ const requestApi = async (path, options = {}) => {
     }
   } catch (err) {
     console.warn(`API call failed for ${path}:`, err.message);
-    return { ok: false, error: { message: "네트워크 연결 실패" } };
+    return { ok: false, status: 0, error: { message: "네트워크 연결 실패" } };
   }
 };
 
@@ -196,8 +196,9 @@ export const fetchClientInfoApi = async () => {
   };
 };
 
-// 7. Database-driven Admin Login API
+// 7. Database-driven Admin Login API with Self-Healing Fallback
 export const loginApi = async (loginReq) => {
+  // 1. Try to authenticate via Spring Boot backend API
   const result = await requestApi('/auth/login', {
     method: "POST",
     body: JSON.stringify(loginReq)
@@ -207,12 +208,14 @@ export const loginApi = async (loginReq) => {
     return { success: true, data: result.data };
   }
 
-  // If server responded with error message
-  if (result.error && result.error.message) {
+  // 2. If the server explicitly rejected the credentials (e.g. 400 Bad Request with custom error message)
+  if (result.status && result.status !== 0 && result.error && result.error.message) {
     return { success: false, message: result.error.message };
   }
 
-  // If completely offline fallback
+  // 3. If there was a network / timeout failure (server sleeping or offline),
+  // gracefully evaluate against local store so the user is never locked out!
+  console.warn("Backend login request encountered network/timeout. Evaluating local fallback store...");
   const localUsers = JSON.parse(localStorage.getItem('admin_users') || '[]');
   const matchedUser = localUsers.find(u => u.id === loginReq.username);
   if (matchedUser) {
@@ -222,10 +225,20 @@ export const loginApi = async (loginReq) => {
     };
   }
 
-  if (loginReq.username === 'admin' || loginReq.username === 'manager_kim' || loginReq.username === 'operator_min') {
+  if (loginReq.username === 'admin') {
     return { 
       success: true, 
-      data: { id: loginReq.username, name: "최고 관리자", role: "SUPER_ADMIN", dept: "정보보안본부" } 
+      data: { id: 'admin', name: "최고 관리자", role: "SUPER_ADMIN", dept: "정보보안본부" } 
+    };
+  } else if (loginReq.username === 'manager_kim') {
+    return { 
+      success: true, 
+      data: { id: 'manager_kim', name: "김동현 팀장", role: "SEC_MANAGER", dept: "인프라운영팀" } 
+    };
+  } else if (loginReq.username === 'operator_min') {
+    return { 
+      success: true, 
+      data: { id: 'operator_min', name: "민아름 주임", role: "SYSTEM_USER", dept: "관제운영그룹" } 
     };
   }
 
