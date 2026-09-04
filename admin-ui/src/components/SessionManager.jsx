@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function SessionManager({ sessions, onCreateSession, onRenewSession, onForceLogout }) {
+export default function SessionManager({ sessions = [], users = [], clientInfo = null, onCreateSession, onRenewSession, onForceLogout }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newSessionUser, setNewSessionUser] = useState('');
   const [newSessionIp, setNewSessionIp] = useState('192.168.1.15');
   const [newSessionClientType, setNewSessionClientType] = useState('WPF');
-  const [newSessionMac, setNewSessionMac] = useState('B2-C3-E4-91-F3-0A');
+  const [newSessionMac, setNewSessionMac] = useState('00:50:56:C0:00:08');
+
+  // Initialize selected user when users list loads or changes
+  useEffect(() => {
+    if (users.length > 0 && !newSessionUser) {
+      setNewSessionUser(users[0].id);
+    }
+  }, [users, newSessionUser]);
+
+  const handleOpenModal = () => {
+    if (users.length > 0) {
+      setNewSessionUser(users[0].id);
+    }
+    if (clientInfo?.ip) {
+      setNewSessionIp(clientInfo.ip);
+    }
+    setShowCreateModal(true);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -16,15 +33,12 @@ export default function SessionManager({ sessions, onCreateSession, onRenewSessi
       ip: newSessionIp,
       clientType: newSessionClientType,
       macAddress: newSessionMac,
-      os: newSessionClientType === 'WPF' ? 'Windows 11 x64' : 'MacOS Sonoma (Web)',
-      browser: newSessionClientType === 'WPF' ? 'WPF Client Embedded' : 'Chrome 125',
+      os: newSessionClientType === 'WPF' ? 'Windows 11 Enterprise x64' : 'macOS / Web Browser',
+      browser: newSessionClientType === 'WPF' ? 'WPF Client Embedded' : 'Chrome Browser',
       riskLevel: 'LOW'
     });
 
-    // Reset form
-    setNewSessionUser('');
-    setNewSessionIp('192.168.1.15');
-    setNewSessionMac('B2-C3-E4-91-F3-0A');
+    // Reset and close
     setShowCreateModal(false);
   };
 
@@ -37,8 +51,8 @@ export default function SessionManager({ sessions, onCreateSession, onRenewSessi
             서버 메모리(Redis) 상의 액티브 세션 리스트 조회, 세션 강제 종료 및 주기 연장 기능
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          ➕ 신규 세션 임의 발행 (Create)
+        <button className="btn btn-primary" onClick={handleOpenModal}>
+          ➕ 신규 세션 발급 (DB 사용자 연동)
         </button>
       </div>
 
@@ -134,15 +148,25 @@ export default function SessionManager({ sessions, onCreateSession, onRenewSessi
             
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label className="form-label">대상 사용자 ID</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="예: user_test"
-                  value={newSessionUser}
-                  onChange={(e) => setNewSessionUser(e.target.value)}
-                  required
-                />
+                <label className="form-label">대상 사용자 선택 (PostgreSQL 등록 계정)</label>
+                {users.length === 0 ? (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--accent-amber)', padding: '0.5rem', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px' }}>
+                    등록된 사용자가 없습니다. 사용자 관리 탭에서 먼저 계정을 생성해 주세요.
+                  </div>
+                ) : (
+                  <select
+                    className="form-control"
+                    value={newSessionUser}
+                    onChange={(e) => setNewSessionUser(e.target.value)}
+                    required
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.id} ({u.name} - {u.dept} | {u.role})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="form-group">
@@ -152,8 +176,8 @@ export default function SessionManager({ sessions, onCreateSession, onRenewSessi
                   value={newSessionClientType}
                   onChange={(e) => setNewSessionClientType(e.target.value)}
                 >
-                  <option value="WPF">C# WPF Client</option>
-                  <option value="WEB">Web Browser</option>
+                  <option value="WPF">💻 C# WPF Client</option>
+                  <option value="WEB">🌐 Web Browser</option>
                 </select>
               </div>
 
@@ -164,6 +188,7 @@ export default function SessionManager({ sessions, onCreateSession, onRenewSessi
                   className="form-control"
                   value={newSessionIp}
                   onChange={(e) => setNewSessionIp(e.target.value)}
+                  placeholder="예: 192.168.1.15"
                   required
                 />
               </div>
@@ -175,13 +200,16 @@ export default function SessionManager({ sessions, onCreateSession, onRenewSessi
                   className="form-control"
                   value={newSessionMac}
                   onChange={(e) => setNewSessionMac(e.target.value)}
+                  placeholder="예: 00:50:56:C0:00:08"
                   required
                 />
               </div>
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>취소</button>
-                <button type="submit" className="btn btn-primary">발급 완료</button>
+                <button type="submit" className="btn btn-primary" disabled={users.length === 0}>
+                  Redis 세션 발급
+                </button>
               </div>
             </form>
           </div>

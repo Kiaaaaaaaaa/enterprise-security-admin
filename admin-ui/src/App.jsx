@@ -201,6 +201,8 @@ export default function App() {
         return (
           <SessionManager
             sessions={sessions}
+            users={users}
+            clientInfo={clientInfo}
             onCreateSession={handleCreateSession}
             onRenewSession={handleRenewSession}
             onForceLogout={handleForceLogout}
