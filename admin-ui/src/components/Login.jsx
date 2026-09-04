@@ -63,10 +63,10 @@ export default function Login({ onLoginSuccess }) {
           } else {
             setErrorMessage(result.message || "로그인에 실패했습니다.");
           }
-        }, 800);
+        }, 300);
 
-      }, 800);
-    }, 600);
+      }, 300);
+    }, 300);
   };
 
   return (

@@ -25,28 +25,14 @@ export const checkBackendHealth = async () => {
     }
   }
 
-  // Test Remote (Render Cloud API) with 5s timeout
+  // Test Remote (Render Cloud API)
   try {
     const response = await fetch(`${REMOTE_URL}/health`, { 
-      method: "GET",
-      signal: AbortSignal.timeout(5000)
-    });
-    if (response.ok) {
-      BASE_URL = REMOTE_URL;
-      backendOnline = true;
-      return true;
-    }
-  } catch (error) {
-    // ignore
-  }
-
-  // Fallback to testing BASE_URL
-  try {
-    const response = await fetch(`${BASE_URL}/health`, {
       method: "GET",
       signal: AbortSignal.timeout(4000)
     });
     if (response.ok) {
+      BASE_URL = REMOTE_URL;
       backendOnline = true;
       return true;
     }
@@ -69,7 +55,7 @@ const requestApi = async (path, options = {}) => {
         "Content-Type": "application/json",
         ...(options.headers || {})
       },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(8000)
     });
     if (res.ok) {
       backendOnline = true;
@@ -196,26 +182,37 @@ export const fetchClientInfoApi = async () => {
   };
 };
 
-// 7. Database-driven Admin Login API with Self-Healing Fallback
+// 7. Instant-Response & Self-Healing Admin Login API
 export const loginApi = async (loginReq) => {
-  // 1. Try to authenticate via Spring Boot backend API
-  const result = await requestApi('/auth/login', {
-    method: "POST",
-    body: JSON.stringify(loginReq)
-  });
-  
-  if (result.ok && result.data) {
-    return { success: true, data: result.data };
+  // 1. Send live auth request to backend (with 2.5s rapid check)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(loginReq),
+      signal: controller.signal
+    }).catch(() => null);
+
+    clearTimeout(timeoutId);
+
+    if (res) {
+      if (res.ok) {
+        backendOnline = true;
+        const data = await res.json().catch(() => null);
+        if (data) return { success: true, data };
+      } else if (res.status === 400) {
+        const err = await res.json().catch(() => ({}));
+        return { success: false, message: err.message || "등록되지 않은 관리자 계정입니다: " + loginReq.username };
+      }
+    }
+  } catch (e) {
+    // ignore network/timeout
   }
 
-  // 2. If the server explicitly rejected the credentials (e.g. 400 Bad Request with custom error message)
-  if (result.status && result.status !== 0 && result.error && result.error.message) {
-    return { success: false, message: result.error.message };
-  }
-
-  // 3. If there was a network / timeout failure (server sleeping or offline),
-  // gracefully evaluate against local store so the user is never locked out!
-  console.warn("Backend login request encountered network/timeout. Evaluating local fallback store...");
+  // 2. Self-healing fallback: Check localStorage and default seed accounts
   const localUsers = JSON.parse(localStorage.getItem('admin_users') || '[]');
   const matchedUser = localUsers.find(u => u.id === loginReq.username);
   if (matchedUser) {
